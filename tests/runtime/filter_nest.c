@@ -36,6 +36,15 @@ char *get_output(void)
     return val;
 }
 
+int callback_test(void* data, size_t size, void* cb_data)
+{
+    if (size > 0) {
+        flb_debug("[test_filter_nest] received message: %s", data);
+        set_output(data); /* success */
+    }
+    return 0;
+}
+
 void flb_test_filter_nest_single(void)
 {
     int ret;
@@ -46,20 +55,28 @@ void flb_test_filter_nest_single(void)
     int out_ffd;
     int filter_ffd;
 
+    struct flb_lib_out_cb cb;
+    cb.cb   = callback_test;
+    cb.data = NULL;
+
     ctx = flb_create();
 
     in_ffd = flb_input(ctx, (char *) "lib", NULL);
     TEST_CHECK(in_ffd >= 0);
     flb_input_set(ctx, in_ffd, "tag", "test", NULL);
 
-    out_ffd = flb_output(ctx, (char *) "stdout", NULL);
+    out_ffd = flb_output(ctx, (char *) "lib", &cb);
     TEST_CHECK(out_ffd >= 0);
-    flb_output_set(ctx, out_ffd, "match", "test", NULL);
+    flb_output_set(ctx, out_ffd,
+        "format", "json",
+        "match", "test",
+        NULL);
     filter_ffd = flb_filter(ctx, (char *) "nest", NULL);
     TEST_CHECK(filter_ffd >= 0);
 
     ret = flb_filter_set(ctx, filter_ffd,
         "Match", "*",
+        "Operation", "nest",
         "Wildcard", "to_nest",
         "Nest_under", "nested_key",
         NULL);
@@ -73,13 +90,16 @@ void flb_test_filter_nest_single(void)
     bytes = flb_lib_push(ctx, in_ffd, p, strlen(p));
     TEST_CHECK(bytes == strlen(p));
 
-    sleep(1); /* waiting flush */
+    /* waiting flush */
+    do {
+        output = get_output();
+        sleep(1);
+    } while (!output);
 
-    output = get_output();
     TEST_CHECK_(output != NULL, "Expected output to not be NULL");
 
     if (output != NULL) {
-        expected = "\"nested_key\":\"{\"to_nest\":\"This is the data to nest\"}\"";
+        expected = "\"nested_key\":{\"to_nest\":\"This is the data to nest\"}";
         TEST_CHECK_(strstr(output, expected) != NULL, "Expected output to contain '%s', got '%s'", expected, output);
         free(output);
     }
