@@ -13,12 +13,14 @@ char *output = NULL;
 void flb_test_filter_nest_single(void);
 void flb_test_filter_nest_multi(void);
 void flb_test_filter_lift(void);
+void flb_test_filter_lift_add_prefix(void);
 
 /* Test list */
 TEST_LIST = {
     {"nest single", flb_test_filter_nest_single },
     {"nest multi", flb_test_filter_nest_multi },
     {"lift", flb_test_filter_lift },
+    {"lift with add_prefix", flb_test_filter_lift_add_prefix },
     {NULL, NULL}
 };
 
@@ -286,6 +288,68 @@ void flb_test_filter_lift(void)
 
     if (output != NULL) {
         expected = "[ 1448403340.0, { \"top-level\": \"Top-level key\", \"test1\": \"This is the data to lift\", \"test2\": \"This is also data to lift\" } ]";
+        TEST_IF_EQUIVALENT_JSON(output, expected);
+        free(output);
+    }
+    flb_stop(ctx);
+    flb_destroy(ctx);
+}
+
+void flb_test_filter_lift_add_prefix(void)
+{
+    int ret;
+    int bytes;
+    char *p, *output, *expected;
+    flb_ctx_t *ctx;
+    int in_ffd;
+    int out_ffd;
+    int filter_ffd;
+
+    struct flb_lib_out_cb cb;
+    cb.cb   = callback_test;
+    cb.data = NULL;
+
+    ctx = flb_create();
+
+    in_ffd = flb_input(ctx, (char *) "lib", NULL);
+    TEST_CHECK(in_ffd >= 0);
+    flb_input_set(ctx, in_ffd, "tag", "test", NULL);
+
+    out_ffd = flb_output(ctx, (char *) "lib", &cb);
+    TEST_CHECK(out_ffd >= 0);
+    flb_output_set(ctx, out_ffd,
+        "format", "json",
+        "match", "test",
+        NULL);
+    filter_ffd = flb_filter(ctx, (char *) "nest", NULL);
+    TEST_CHECK(filter_ffd >= 0);
+
+    ret = flb_filter_set(ctx, filter_ffd,
+        "Match", "*",
+        "Operation", "lift",
+        "Nested_under", "to_lift",
+        "Add_prefix", "foo.",
+        NULL);
+
+    TEST_CHECK(ret == 0);
+
+    ret = flb_start(ctx);
+    TEST_CHECK(ret == 0);
+
+    p = "[ 1448403340, { \"top-level\": \"Top-level key\", \"to_lift\": { \"test1\": \"This is the data to lift\", \"test2\": \"This is also data to lift\" } } ]";
+    bytes = flb_lib_push(ctx, in_ffd, p, strlen(p));
+    TEST_CHECK(bytes == strlen(p));
+
+    /* waiting flush */
+    do {
+        output = get_output();
+        sleep(1);
+    } while (!output);
+
+    TEST_CHECK_(output != NULL, "Expected output to not be NULL");
+
+    if (output != NULL) {
+        expected = "[ 1448403340.0, { \"top-level\": \"Top-level key\", \"foo.test1\": \"This is the data to lift\", \"foo.test2\": \"This is also data to lift\" } ]";
         TEST_IF_EQUIVALENT_JSON(output, expected);
         free(output);
     }
