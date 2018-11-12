@@ -145,7 +145,7 @@ void flb_test_filter_nest_single(void)
     ret = flb_start(ctx);
     TEST_CHECK(ret == 0);
 
-    p = "[1448403340, {\"to_nest\":\"This is the data to nest\", \"extra\":\"Some more data\"}]";
+    p = "[ 1448403340, { \"to_nest\": \"This is the data to nest\", \"extra\": \"Some more data\" } ]";
     bytes = flb_lib_push(ctx, in_ffd, p, strlen(p));
     TEST_CHECK(bytes == strlen(p));
 
@@ -158,8 +158,8 @@ void flb_test_filter_nest_single(void)
     TEST_CHECK_(output != NULL, "Expected output to not be NULL");
 
     if (output != NULL) {
-        expected = "\"nested_key\":{\"to_nest\":\"This is the data to nest\"}";
-        TEST_CHECK_(strstr(output, expected) != NULL, "Expected output to contain '%s', got '%s'", expected, output);
+        expected = "[ 1448403340.0, { \"extra\": \"Some more data\", \"nested_key\": { \"to_nest\": \"This is the data to nest\" } } ]";
+        TEST_IF_EQUIVALENT_JSON(output, expected);
         free(output);
     }
     flb_stop(ctx);
