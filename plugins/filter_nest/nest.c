@@ -430,6 +430,7 @@ static inline int apply_lifting_rules(msgpack_packer * packer,
 
     if (items_to_lift == 0) {
         flb_debug("[filter_nest] Lift : No match found for %s", ctx->key);
+        msgpack_pack_object(packer, *root);
         return 0;
     }
 
@@ -474,6 +475,7 @@ static inline int apply_nesting_rules(msgpack_packer * packer,
 
     if (items_to_nest == 0) {
         flb_debug("[filter_nest] Nest : No match found for %s", ctx->prefix);
+        msgpack_pack_object(packer, *root);
         return 0;
     }
 
