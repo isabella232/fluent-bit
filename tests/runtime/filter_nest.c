@@ -1,6 +1,7 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 
 #include <fluent-bit.h>
+#include <fluent-bit/flb_pack.h>
 #include "flb_tests_runtime.h"
 
 pthread_mutex_t result_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -17,6 +18,64 @@ TEST_LIST = {
     {NULL, NULL}
 };
 
+
+// normalize JSON by round-tripping it through a msgpack
+char *normalize_json(char *json_str)
+{
+    char *buf;
+    size_t buf_len;
+    int root_type;
+    msgpack_unpacked elem;
+    size_t off = 0;
+    size_t out_json_str_capacity = 500;
+    char *out_json_str = malloc(out_json_str_capacity);
+    size_t out_json_str_len = 0;
+
+    if (flb_pack_json(json_str, strlen(json_str),
+                &buf, &buf_len, &root_type)) {
+        return NULL;
+    }
+
+    msgpack_unpacked_init(&elem);
+    while (msgpack_unpack_next(&elem, buf, buf_len, &off)) {
+        while (1) {
+            if (out_json_str_len) {
+                out_json_str[out_json_str_len++] = ',';
+                out_json_str[out_json_str_len++] = ' ';
+            }
+            int chars_written = flb_msgpack_to_json(out_json_str + out_json_str_len, out_json_str_capacity - out_json_str_len, &elem.data);
+            if (chars_written > 0) {
+                out_json_str_len += chars_written;
+                break;
+            }
+            out_json_str = realloc(out_json_str, out_json_str_capacity + 500);
+        }
+    }
+    msgpack_unpacked_destroy(&elem);
+
+    return out_json_str;
+}
+
+#define TEST_IF_EQUIVALENT_JSON(got_json_str, expected_json_str) \
+{ \
+    char *got_json_str_normalized = normalize_json(got_json_str); \
+    char *expected_json_str_normalized = normalize_json(expected_json_str); \
+     \
+    if ( \
+        TEST_CHECK_(got_json_str_normalized != NULL, "The got JSON can be normalized: '%s'", got_json_str) \
+        && \
+        TEST_CHECK_(expected_json_str_normalized != NULL, "The expected JSON can be normalized: '%s'", expected_json_str) \
+        && \
+        !TEST_CHECK_(!strcmp(got_json_str_normalized, expected_json_str_normalized), "JSON values match") \
+    ) { \
+        TEST_MSG(" Raw values:"); \
+        TEST_MSG("    Got:      %s", got_json_str); \
+        TEST_MSG("    Expected: %s", expected_json_str); \
+        TEST_MSG(" Normalized values:"); \
+        TEST_MSG("    Got:      %s", got_json_str_normalized); \
+        TEST_MSG("    Expected: %s", expected_json_str_normalized); \
+    } \
+}
 
 void set_output(char *val)
 {
