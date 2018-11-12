@@ -5,7 +5,9 @@
 #include "flb_tests_runtime.h"
 
 pthread_mutex_t result_mutex = PTHREAD_MUTEX_INITIALIZER;
-char *output = NULL;
+char *output;
+size_t output_idx;
+size_t output_capacity = 500;
 
 /* Test data */
 
@@ -13,6 +15,7 @@ char *output = NULL;
 void flb_test_filter_nest_single(void);
 void flb_test_filter_nest_multi(void);
 void flb_test_filter_nest_remove_prefix(void);
+void flb_test_filter_nest_single_multi_record(void);
 void flb_test_filter_lift(void);
 void flb_test_filter_lift_add_prefix(void);
 
@@ -21,6 +24,7 @@ TEST_LIST = {
     {"nest single", flb_test_filter_nest_single },
     {"nest multi", flb_test_filter_nest_multi },
     {"nest with remove_prefix", flb_test_filter_nest_remove_prefix },
+    {"nest single, multi-record", flb_test_filter_nest_single_multi_record },
     {"lift", flb_test_filter_lift },
     {"lift with add_prefix", flb_test_filter_lift_add_prefix },
     {NULL, NULL}
@@ -88,16 +92,41 @@ char *normalize_json(char *json_str)
 void set_output(char *val)
 {
     pthread_mutex_lock(&result_mutex);
-    output = val;
+    if (val) {
+        if (!output) {
+            output = malloc(output_capacity);
+        }
+        if (output_capacity - output_idx < strlen(val) + 3) {
+            output_capacity += 500;
+            output = realloc(output, output_capacity);
+        }
+        if (output_idx) {
+            output[output_idx++] = ',';
+            output[output_idx++] = ' ';
+        }
+        strncpy(output + output_idx, val, output_capacity - output_idx);
+        output[output_capacity-1] = '\0';
+        output_idx += strlen(val);
+    }
     pthread_mutex_unlock(&result_mutex);
 }
 
 char *get_output(void)
 {
+    size_t val_capacity;
     char *val;
 
     pthread_mutex_lock(&result_mutex);
-    val = output;
+    if (output) {
+        val_capacity = strlen(output) + 1;
+        val = malloc(val_capacity);
+
+        strncpy(val, output, val_capacity);
+        val[val_capacity-1] = '\0';
+    }
+    else {
+        val = NULL;
+    }
     pthread_mutex_unlock(&result_mutex);
 
     return val;
@@ -292,6 +321,73 @@ void flb_test_filter_nest_remove_prefix(void)
 
     if (output != NULL) {
         expected = "[ 1448403340.0, { \"extra\": \"Some more data\", \"nested_key\": { \"test1\": \"This is the data to nest\", \"test2\": \"This is also data to nest\" } } ]";
+        TEST_IF_EQUIVALENT_JSON(output, expected);
+        free(output);
+    }
+    flb_stop(ctx);
+    flb_destroy(ctx);
+}
+
+void flb_test_filter_nest_single_multi_record(void)
+{
+    int ret;
+    int bytes;
+    char *p, *output, *expected;
+    flb_ctx_t *ctx;
+    int in_ffd;
+    int out_ffd;
+    int filter_ffd;
+
+    struct flb_lib_out_cb cb;
+    cb.cb   = callback_test;
+    cb.data = NULL;
+
+    ctx = flb_create();
+
+    in_ffd = flb_input(ctx, (char *) "lib", NULL);
+    TEST_CHECK(in_ffd >= 0);
+    flb_input_set(ctx, in_ffd, "tag", "test", NULL);
+
+    out_ffd = flb_output(ctx, (char *) "lib", &cb);
+    TEST_CHECK(out_ffd >= 0);
+    flb_output_set(ctx, out_ffd,
+        "format", "json",
+        "match", "test",
+        NULL);
+    filter_ffd = flb_filter(ctx, (char *) "nest", NULL);
+    TEST_CHECK(filter_ffd >= 0);
+
+    ret = flb_filter_set(ctx, filter_ffd,
+        "Match", "*",
+        "Operation", "nest",
+        "Wildcard", "to_nest",
+        "Nest_under", "nested_key",
+        NULL);
+
+    TEST_CHECK(ret == 0);
+
+    ret = flb_start(ctx);
+    TEST_CHECK(ret == 0);
+
+    p = "[ 1448403340, { \"to_nest\": \"This is the data to nest\", \"extra\": \"Some more data\" } ]";
+    bytes = flb_lib_push(ctx, in_ffd, p, strlen(p));
+    TEST_CHECK(bytes == strlen(p));
+
+    p = "[ 1448403341, { \"extra\": \"Some more data\" } ]";
+    bytes = flb_lib_push(ctx, in_ffd, p, strlen(p));
+    TEST_CHECK(bytes == strlen(p));
+
+    /* waiting flush */
+    do {
+        output = get_output();
+        sleep(1);
+    } while (!output);
+
+    TEST_CHECK_(output != NULL, "Expected output to not be NULL");
+
+    if (output != NULL) {
+        expected = "[ 1448403340.0, { \"extra\": \"Some more data\", \"nested_key\": { \"to_nest\": \"This is the data to nest\" } } ], "
+                   "[ 1448403341.0, { \"extra\": \"Some more data\" } ]";
         TEST_IF_EQUIVALENT_JSON(output, expected);
         free(output);
     }
