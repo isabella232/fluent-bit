@@ -159,6 +159,9 @@ void flb_test_filter_nest_single(void)
 
     ctx = flb_create();
 
+    flb_config_set_property(ctx->config, "Flush", "1");
+    flb_config_set_property(ctx->config, "Grace", "1");
+
     in_ffd = flb_input(ctx, (char *) "lib", NULL);
     TEST_CHECK(in_ffd >= 0);
     flb_input_set(ctx, in_ffd, "tag", "test", NULL);
@@ -220,6 +223,9 @@ void flb_test_filter_nest_multi(void)
     cb.data = NULL;
 
     ctx = flb_create();
+
+    flb_config_set_property(ctx->config, "Flush", "1");
+    flb_config_set_property(ctx->config, "Grace", "1");
 
     in_ffd = flb_input(ctx, (char *) "lib", NULL);
     TEST_CHECK(in_ffd >= 0);
@@ -283,6 +289,9 @@ void flb_test_filter_nest_remove_prefix(void)
 
     ctx = flb_create();
 
+    flb_config_set_property(ctx->config, "Flush", "1");
+    flb_config_set_property(ctx->config, "Grace", "1");
+
     in_ffd = flb_input(ctx, (char *) "lib", NULL);
     TEST_CHECK(in_ffd >= 0);
     flb_input_set(ctx, in_ffd, "tag", "test", NULL);
@@ -345,6 +354,9 @@ void flb_test_filter_nest_single_multi_record(void)
     cb.data = NULL;
 
     ctx = flb_create();
+
+    flb_config_set_property(ctx->config, "Flush", "1");
+    flb_config_set_property(ctx->config, "Grace", "1");
 
     in_ffd = flb_input(ctx, (char *) "lib", NULL);
     TEST_CHECK(in_ffd >= 0);
@@ -413,6 +425,9 @@ void flb_test_filter_lift(void)
 
     ctx = flb_create();
 
+    flb_config_set_property(ctx->config, "Flush", "1");
+    flb_config_set_property(ctx->config, "Grace", "1");
+
     in_ffd = flb_input(ctx, (char *) "lib", NULL);
     TEST_CHECK(in_ffd >= 0);
     flb_input_set(ctx, in_ffd, "tag", "test", NULL);
@@ -473,6 +488,9 @@ void flb_test_filter_lift_add_prefix(void)
     cb.data = NULL;
 
     ctx = flb_create();
+
+    flb_config_set_property(ctx->config, "Flush", "1");
+    flb_config_set_property(ctx->config, "Grace", "1");
 
     in_ffd = flb_input(ctx, (char *) "lib", NULL);
     TEST_CHECK(in_ffd >= 0);
@@ -535,6 +553,9 @@ void flb_test_filter_lift_multi_record(void)
     cb.data = NULL;
 
     ctx = flb_create();
+
+    flb_config_set_property(ctx->config, "Flush", "1");
+    flb_config_set_property(ctx->config, "Grace", "1");
 
     in_ffd = flb_input(ctx, (char *) "lib", NULL);
     TEST_CHECK(in_ffd >= 0);
